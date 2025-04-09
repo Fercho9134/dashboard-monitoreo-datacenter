@@ -1,7 +1,7 @@
 // src/components/HeatMapCalendar.jsx
 import { useEffect, useState } from "react";
 import { format, eachDayOfInterval } from "date-fns";
-import { es } from 'date-fns/locale';
+import { es } from "date-fns/locale";
 import { motion } from "framer-motion";
 import { fetchHeatMap } from "@/lib/api";
 
@@ -17,28 +17,33 @@ const HeatMapCalendar = ({ sensor, startDate, endDate }) => {
     const fetchData = async () => {
       setIsLoading(true);
       setError(null);
-      
+
       try {
         const response = await fetchHeatMap(sensor, startDate, endDate);
-        
+
         if (!Array.isArray(response)) {
-          throw new Error('La API no devolvió un array válido');
+          throw new Error("La API no devolvió un array válido");
         }
 
         setHeatmapData(response);
 
         // Calcular estadísticas excluyendo los días con media_lectura = 0
         const validValues = response
-          .filter(item => item.media_lectura > 0)
-          .map(item => item.media_lectura);
+          .filter(
+            (item) =>
+              item.media_lectura > 0 &&
+              item.media_lectura != null &&
+              item.media_lectura !== "N/A"
+          )
+          .map((item) => item.media_lectura);
 
         if (validValues.length > 0) {
-          const mean = validValues.reduce((a, b) => a + b, 0) / validValues.length;
+          const mean =
+            validValues.reduce((a, b) => a + b, 0) / validValues.length;
           const min = Math.min(...validValues);
           const max = Math.max(...validValues);
           setStats({ mean, min, max });
         }
-
       } catch (err) {
         console.error("Error al cargar datos del mapa de calor:", err);
         setError(err.message);
@@ -58,26 +63,26 @@ const HeatMapCalendar = ({ sensor, startDate, endDate }) => {
 
   // Paleta de colores mejorada con mejor contraste
   const colorPalette = [
-    '#f3f4f6', // Sin datos (0) - gris claro con borde
-    '#a7f3d0', // Muy bajo - verde muy claro
-    '#6ee7b7', // Bajo - verde claro
-    '#34d399', // Medio - verde
-    '#10b981', // Alto - verde oscuro
-    '#059669'  // Muy alto - verde muy oscuro
+    "#f3f4f6", // Sin datos (0) - gris claro con borde
+    "#a7f3d0", // Muy bajo - verde muy claro
+    "#6ee7b7", // Bajo - verde claro
+    "#34d399", // Medio - verde
+    "#10b981", // Alto - verde oscuro
+    "#059669", // Muy alto - verde muy oscuro
   ];
 
   // Función para determinar el color basado en el valor
   const getColorForValue = (value) => {
     if (value === 0) return colorPalette[0]; // Días sin lecturas
-    
+
     const { min, max } = stats;
-    
+
     // Si todos los valores son iguales o no hay rango
     if (max - min <= 0) return colorPalette[3];
-    
+
     // Normalizar el valor entre 0 y 1 respecto al rango
     const normalized = (value - min) / (max - min);
-    
+
     // Determinar el índice de color
     if (normalized < 0.2) return colorPalette[1];
     if (normalized < 0.4) return colorPalette[2];
@@ -88,8 +93,8 @@ const HeatMapCalendar = ({ sensor, startDate, endDate }) => {
 
   // Función para obtener el valor de un día específico
   const getValueForDay = (day) => {
-    const dateStr = format(day, 'yyyy-MM-dd');
-    const dayData = heatmapData.find(d => d.fecha === dateStr);
+    const dateStr = format(day, "yyyy-MM-dd");
+    const dayData = heatmapData.find((d) => d.fecha === dateStr);
     return dayData ? dayData.media_lectura : null;
   };
 
@@ -97,17 +102,17 @@ const HeatMapCalendar = ({ sensor, startDate, endDate }) => {
   const groupByWeek = (days) => {
     const weeks = [];
     let currentWeek = [];
-    
+
     days.forEach((day, index) => {
       currentWeek.push(day);
-      
+
       // Cada 7 días o al final del array
       if (currentWeek.length === 7 || index === days.length - 1) {
         weeks.push([...currentWeek]);
         currentWeek = [];
       }
     });
-    
+
     return weeks;
   };
 
@@ -118,25 +123,25 @@ const HeatMapCalendar = ({ sensor, startDate, endDate }) => {
     return (
       <div className="flex flex-col items-center justify-center h-64 space-y-4">
         <motion.div
-          animate={{ 
+          animate={{
             rotate: 360,
-            scale: [1, 1.2, 1]
+            scale: [1, 1.2, 1],
           }}
           transition={{
             duration: 2,
             ease: "easeInOut",
-            repeat: Infinity
+            repeat: Infinity,
           }}
           className="w-16 h-16 rounded-full bg-gradient-to-r from-blue-500 to-green-500 flex items-center justify-center"
         >
-          <motion.div 
+          <motion.div
             className="w-14 h-14 rounded-full bg-white"
             animate={{ scale: [1, 0.9, 1] }}
             transition={{
               duration: 2,
               ease: "easeInOut",
               repeat: Infinity,
-              repeatType: "reverse"
+              repeatType: "reverse",
             }}
           />
         </motion.div>
@@ -178,23 +183,32 @@ const HeatMapCalendar = ({ sensor, startDate, endDate }) => {
               {week.map((day, dayIndex) => {
                 const value = getValueForDay(day);
                 const color = getColorForValue(value);
-                const dayNumber = format(day, 'd');
-                const textColor = value === 0 ? 'text-gray-500' : 
-                                color === colorPalette[4] || color === colorPalette[5] ? 
-                                'text-white' : 'text-gray-800';
-                
+                const dayNumber = format(day, "d");
+                const textColor =
+                  value === 0
+                    ? "text-gray-500"
+                    : color === colorPalette[4] || color === colorPalette[5]
+                    ? "text-white"
+                    : "text-gray-800";
+
                 return (
-                  <motion.div 
+                  <motion.div
                     key={dayIndex}
                     initial={{ opacity: 0, scale: 0.8 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ delay: weekIndex * 0.05 + dayIndex * 0.01 }}
                     className={`flex items-center justify-center w-10 h-10 rounded-md relative group`}
-                    style={{ 
+                    style={{
                       backgroundColor: color,
-                      border: value === 0 ? '1px solid #e5e7eb' : 'none'
+                      border: value === 0 ? "1px solid #e5e7eb" : "none",
                     }}
-                    title={`${format(day, 'PPP', { locale: es })}: ${value !== null ? (value === 0 ? 'Sin lecturas' : value.toFixed(2)) : 'Sin datos'}`}
+                    title={`${format(day, "PPP", { locale: es })}: ${
+                      value !== null
+                        ? value === 0
+                          ? "Sin lecturas"
+                          : value.toFixed(2)
+                        : "Sin datos"
+                    }`}
                   >
                     <span className={`text-xs font-medium ${textColor}`}>
                       {dayNumber}
@@ -206,15 +220,15 @@ const HeatMapCalendar = ({ sensor, startDate, endDate }) => {
           ))}
         </div>
       </div>
-      
+
       {/* Leyenda */}
       <div className="flex flex-col items-center space-y-3">
         <div className="flex items-center gap-1">
           <div className="text-xs text-gray-500">Bajo</div>
           {colorPalette.slice(1).map((color, i) => (
-            <div 
-              key={i} 
-              className="w-6 h-6 rounded-sm" 
+            <div
+              key={i}
+              className="w-6 h-6 rounded-sm"
               style={{ backgroundColor: color }}
             ></div>
           ))}
@@ -227,7 +241,7 @@ const HeatMapCalendar = ({ sensor, startDate, endDate }) => {
           </div>
         </div>
       </div>
-      
+
       {/* Estadísticas */}
       {stats.mean > 0 && (
         <div className="grid grid-cols-3 gap-4 text-center mt-6">
