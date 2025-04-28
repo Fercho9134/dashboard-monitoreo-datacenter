@@ -197,9 +197,9 @@ export default function Navbar() {
         hideProgressBar: true,
         bodyClassName: "py-2",
         onOpen: withSound ? () => {
-          const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/1743/1743-preview.mp3');
+          const audio = new Audio('https://cdn.freesound.org/previews/366/366103_6687700-lq.mp3');
           if (audio.canPlayType('audio/mpeg')) {
-            audio.volume = 0.02;
+            audio.volume = 0.8;
             audio.play().catch(e => console.log("Error al reproducir sonido:", e));
           } else {
             console.log("Formato de audio no soportado");
