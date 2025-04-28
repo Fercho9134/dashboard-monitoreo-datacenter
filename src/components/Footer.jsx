@@ -33,7 +33,7 @@ export default function Footer() {
            whileInView={{ opacity: 1, y: 0 }}
            transition={{ duration: 0.5, delay: 0.4 }}
            className="border-t border-gray-800 mt-8 pt-8 text-center"
-         ><
+         >
           <p className="text-gray-400">
             &copy; {new Date().getFullYear()} DataCenter Monitor. Todos los derechos reservados.
           </p>
