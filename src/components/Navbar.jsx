@@ -9,16 +9,155 @@ import {
   Sun,
   Moon,
   BrainCircuit,
-  SunMoon
+  SunMoon,
+  Bell,
+  BellRing,
+  Trash2,
+  Check
 } from "lucide-react";
 import { motion } from "framer-motion";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useContext, createContext } from "react";
 import AccessModal from "./AccessModal";
 import mqttInstance from "../utils/mqttClient";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+//imports use callback
+import { useCallback, useRef } from "react";
 
-const MQTT_TOPIC = "dataCenter/comandos";
+// Contexto de notificaciones
+const NotificationsContext = createContext();
+
+
+export const NotificationsProvider = ({ children }) => {
+  const [notifications, setNotifications] = useState([]);
+
+
+  const addNotification = useCallback((notification) => {
+ 
+
+    const newId = Date.now() + Math.random();
+    setNotifications(prev => [{
+      id: newId,
+      ...notification,
+      read: false
+    }, ...prev]);
+  }, []);
+
+
+  const markAsRead = useCallback((id) => {
+    setNotifications(prev =>
+      prev.map(n => n.id === id ? {...n, read: true} : n)
+    );
+  }, []); // Referencia estable
+
+
+  const clearAll = useCallback(() => {
+    setNotifications([]);
+  }, []); // Referencia estable
+
+
+  const contextValue = { notifications, addNotification, markAsRead, clearAll };
+
+  return (
+    <NotificationsContext.Provider value={contextValue}>
+      {children}
+    </NotificationsContext.Provider>
+  );
+};
+
+export const useNotifications = () => useContext(NotificationsContext);
+
+// Componente de campana de notificaciones
+const NotificationBell = () => {
+  const { notifications, markAsRead, clearAll } = useNotifications();
+  const [showNotifications, setShowNotifications] = useState(false);
+  
+  const unreadCount = notifications.filter(n => !n.read).length;
+  
+  const playNotificationSound = () => {
+    console.log("Reproduciendo sonido de notificación");
+  };
+
+  return (
+    <div className="relative">
+      <button 
+        onClick={() => setShowNotifications(!showNotifications)}
+        className="p-2 rounded-full hover:bg-gray-700 transition relative"
+      >
+        {unreadCount > 0 ? (
+          <BellRing className="w-5 h-5 text-amber-400" />
+        ) : (
+          <Bell className="w-5 h-5 text-gray-300" />
+        )}
+        {unreadCount > 0 && (
+          <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs 
+                          rounded-full h-5 w-5 flex items-center justify-center">
+            {unreadCount > 9 ? "9+" : unreadCount}
+          </span>
+        )}
+      </button>
+      
+      {showNotifications && (
+        <div className="absolute right-0 mt-2 w-72 bg-gray-800 rounded-lg shadow-xl 
+                       border border-gray-700 overflow-hidden z-50">
+          <div className="p-3 border-b border-gray-700 flex justify-between items-center">
+            <h3 className="font-medium text-gray-200">Notificaciones</h3>
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                clearAll();
+              }}
+              className="text-xs text-gray-400 hover:text-red-400 flex items-center gap-1"
+            >
+              <Trash2 className="w-3 h-3" /> Limpiar
+            </button>
+          </div>
+          
+          <div className="max-h-80 overflow-y-auto">
+            {notifications.length === 0 ? (
+              <div className="p-4 text-center text-gray-400 text-sm">
+                No hay notificaciones
+              </div>
+            ) : (
+              notifications.map(notification => (
+                <div 
+                  key={notification.id}
+                  className={`p-3 border-b border-gray-700 hover:bg-gray-700/50 cursor-pointer 
+                             ${!notification.read ? 'bg-gray-800/70' : ''}`}
+                  onClick={() => {
+                    markAsRead(notification.id);
+                    if (notification.urgent) playNotificationSound();
+                  }}
+                >
+                  <div className="flex justify-between items-start gap-2">
+                    <div>
+                      <p className={`text-sm font-medium ${
+                        notification.type === 'danger' ? 'text-red-400' :
+                        notification.type === 'warning' ? 'text-amber-400' :
+                        'text-blue-400'
+                      }`}>
+                        {notification.title}
+                      </p>
+                      <p className="text-xs text-gray-400">{notification.message}</p>
+                    </div>
+                    {!notification.read && (
+                      <span className="bg-blue-500 rounded-full w-2 h-2 flex-shrink-0 mt-1.5"></span>
+                    )}
+                  </div>
+                  <div className="text-right mt-1">
+                    <span className="text-xs text-gray-500">
+                      {new Date(notification.id).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 export default function Navbar() {
   const location = useLocation();
@@ -27,37 +166,213 @@ export default function Navbar() {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [lightMode, setLightMode] = useState(2);
   const [connectionStatus, setConnectionStatus] = useState("Conectando...");
+  const { addNotification } = useNotifications();
+  const lastMessageTimeRef = useRef(0);
+  const isProccessingRef = useRef(false); // Referencia para evitar múltiples procesos
+
+  const showAlertToast = useCallback((title, message, type, withSound = false) => {
+    const getIcon = () => {
+      switch(type) {
+        case 'danger': return '🔥';
+        case 'warning': return '⚠️';
+        case 'security': return '🚨';
+        default: return 'ℹ️';
+      }
+    }
+
+    toast(
+      <div className="flex items-start gap-3">
+        <span className="text-xl mt-0.5">{getIcon()}</span>
+        <div>
+          <p className="text-sm font-medium text-gray-100">{title}</p>
+          <p className="text-xs text-gray-400">{message}</p>
+        </div>
+      </div>,
+      {
+        className: `border-l-4 ${type === 'danger' ? 'border-red-500' : 
+                   alert.type === 'warning' ? 'border-amber-500' : 'border-blue-500'}`,
+        autoClose: 3000,
+        hideProgressBar: true,
+        bodyClassName: "py-2",
+        onOpen: withSound ? () => {
+          const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/1743/1743-preview.mp3');
+          if (audio.canPlayType('audio/mpeg')) {
+            audio.volume = 0.2;
+            audio.play().catch(e => console.log("Error al reproducir sonido:", e));
+          } else {
+            console.log("Formato de audio no soportado");
+          }
+        } : undefined
+      }
+    );
+  }, []);
+
+
+  const handleMessage = useCallback((topic, message) => {
+    const now = Date.now();
+    const timeSinceLastMessage = now - lastMessageTimeRef.current;
+    console.log("Tiempo desde el último mensaje:", timeSinceLastMessage, "ms");
+
+    if (isProccessingRef.current) {
+      console.log("Mensaje en proceso, ignorando nuevo mensaje.");
+      return; // Ignorar si ya se está procesando un mensaje
+    }
+    isProccessingRef.current = true; // Marcar como en proceso
+
+    if (timeSinceLastMessage < 3000) {
+      return; // Ignorar mensajes si no ha pasado el tiempo suficiente
+    }
+
+    lastMessageTimeRef.current = now; // Actualizar el tiempo del último mensaje
+    
+    try {
+      const cleanedMessage = message.toString()
+        .replace(/\u00A0/g, " ")
+        .replace(/[^\x20-\x7E]/g, "");
+      const parsedMessage = JSON.parse(cleanedMessage);
+      console.log("Mensaje recibido:", parsedMessage);
+      
+      // Generar alertas
+      if (parsedMessage.temperatura > 35) {
+        const alert = {
+          type: 'danger',
+          title: 'Temperatura peligrosa',
+          message: `Temperatura alcanzó ${parsedMessage.temperatura}°C`,
+          sensor: 'temperatura',
+          value: parsedMessage.temperatura,
+          urgent: true
+        };
+        addNotification(alert);
+        showAlertToast(alert.title, alert.message, 'danger');
+      }
+      
+      if (parsedMessage.humedad > 50) {
+        const alert = {
+          type: 'warning',
+          title: 'Humedad alta',
+          message: `Humedad alcanzó ${parsedMessage.humedad}%`,
+          sensor: 'humedad',
+          value: parsedMessage.humedad
+        };
+        addNotification(alert);
+        showAlertToast(alert.title, alert.message, 'warning');
+      }
+      
+      if (parsedMessage.corriente > 1) {
+        const alert = {
+          type: 'danger',
+          title: 'Corriente elevada',
+          message: `Corriente medida: ${parsedMessage.corriente}A`,
+          sensor: 'corriente',
+          value: parsedMessage.corriente,
+          urgent: true
+        };
+        addNotification(alert);
+        showAlertToast(alert.title, alert.message, 'danger', true);
+      }
+
+      if (parsedMessage.calidadAire > 400) {
+        const alert = {
+          type: 'warning',
+          title: 'Calidad de aire baja',
+          message: `Calidad de aire medida: ${parsedMessage.calidadAire}`,
+          sensor: 'calidadAire',
+          value: parsedMessage.calidadAire
+        };
+        addNotification(alert);
+        showAlertToast(alert.title, alert.message, 'warning');
+      }
+
+      
+      if (parsedMessage.puerta === 1) {
+        const alert = {
+          type: 'security',
+          title: 'Acceso detectado',
+          message: 'Se detectó acceso al datacenter',
+          sensor: 'puerta',
+          value: parsedMessage.puerta,
+          urgent: true
+        };
+        addNotification(alert);
+        showAlertToast(alert.title, alert.message, 'security', true);
+      }
+    } catch (error) {
+      console.error("Error procesando mensaje MQTT:", error);
+    } finally {
+      isProccessingRef.current = false; // Marcar como no en proceso
+    }
+  }, [addNotification, showAlertToast]);
 
   useEffect(() => {
     const client = mqttInstance.getClient();
+    const topic = "dataCenter/sensores";
 
     const updateStatus = () => {
       setConnectionStatus(client.connected ? "Conectado" : "Desconectado");
     };
 
+    
+
     client.on("connect", () => {
       updateStatus();
       console.log("Conexión establecida");
     });
-
+  
     client.on("reconnect", () => {
       setConnectionStatus("Reconectando...");
     });
-
+  
     client.on("offline", () => {
       updateStatus();
     });
-
+  
     client.on("error", (err) => {
       console.error("Error MQTT:", err);
       setConnectionStatus("Error de conexión");
     });
 
-    updateStatus();
+    client.on("connect", () => {
+      updateStatus();
+      console.log("Conexión establecida");
+    });
+  
+    client.on("reconnect", () => {
+      setConnectionStatus("Reconectando...");
+    });
+  
+    client.on("offline", () => {
+      updateStatus();
+    });
+  
+    client.on("error", (err) => {
+      console.error("Error MQTT:", err);
+      setConnectionStatus("Error de conexión");
+    });
 
-    return () => {};
-  }, []);
+    client.subscribe(topic, { qos: 1 }, (err) => {
+      if (err) {
+        console.error("Error al suscribirse al topic:", err);
+      } else {
+        console.log(`Suscrito al topic: ${topic}`);
+        client.on("message", handleMessage);
+      }
+    });
+
+    updateStatus();
+    return () => {
+      // Limpiar listeners si desmontas el componente
+      client.off("connect", updateStatus);
+      client.off("reconnect", () => setConnectionStatus("Reconectando..."));
+      client.off("offline", updateStatus);
+      client.off("error", () => setConnectionStatus("Error de conexión"));
+      client.off("message", handleMessage);
+      client.unsubscribe(topic);
+    };
+
+  }, [addNotification]);
+
   const handleLightToggle = (newMode) => {
+    const MQTT_TOPIC = "dataCenter/comandos";
     setLightMode(newMode);
     const payload = JSON.stringify({ luzV: newMode });
 
@@ -143,9 +458,10 @@ export default function Navbar() {
               active={location.pathname === "/predictions"}
             />
 
-
-            {/* Interruptor de luces premium */}
+            {/* Controles */}
             <div className="flex items-center gap-4">
+              <NotificationBell />
+              
               <div
                 className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium ${
                   connectionStatus === "Conectado"
@@ -312,39 +628,16 @@ export default function Navbar() {
       <AccessModal
         isOpen={showAccessModal}
         onClose={() => setShowAccessModal(false)}
-        cliente ={mqttInstance.getClient()}
+        cliente={mqttInstance.getClient()}
       />
 
       {/* Configuración de notificaciones */}
-      <ToastContainer
-        position="bottom-right"
-        autoClose={1500}
-        newestOnTop
-        closeOnClick={false}
-        pauseOnFocusLoss={false}
-        draggable={false}
-        pauseOnHover={false}
-        limit={2}
-        toastStyle={{
-          margin: "0 0 1rem 0",
-          width: "220px",
-          background: "rgba(31, 41, 55, 0.98)",
-          backdropFilter: "blur(4px)",
-          border: "1px solid rgba(55, 65, 81, 0.3)",
-          borderRadius: "6px",
-          boxShadow: "0 2px 10px rgba(0, 0, 0, 0.1)",
-          overflow: "hidden",
-        }}
-        progressStyle={{
-          background: "rgba(156, 163, 175, 0.2)",
-          height: "1px",
-        }}
-      />
+      
     </>
   );
 }
 
-// Componente mejorado para los botones del interruptor de luces
+// Componentes auxiliares (LightSwitchButton, NavLink, MobileNavLink) permanecen iguales
 function LightSwitchButton({
   active,
   onClick,
@@ -373,7 +666,6 @@ function LightSwitchButton({
   );
 }
 
-// Componente de enlaces para desktop
 function NavLink({ to, icon, text, active }) {
   return (
     <Link
@@ -390,7 +682,6 @@ function NavLink({ to, icon, text, active }) {
   );
 }
 
-// Componente de enlaces para móvil
 function MobileNavLink({ to, icon, text, active, onClick }) {
   return (
     <Link
