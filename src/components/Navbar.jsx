@@ -202,7 +202,7 @@ export default function Navbar() {
             audio.volume = 0.8;
             audio.play().catch(e => console.log("Error al reproducir sonido:", e));
           } else {
-            console.log("Formato de audio no soportado");
+         
           }
         } : undefined
       }
@@ -216,7 +216,7 @@ export default function Navbar() {
     const messageHash = '${topic}_${message.toString().substring(0, 50)}';
 
     if (messageHash === lastMessageHash) {
-      console.log("Mensaje duplicado, ignorando...");
+     
       return;
     }
 
@@ -234,7 +234,7 @@ export default function Navbar() {
             .replace(/\u00A0/g, " ")
             .replace(/[^\x20-\x7E]/g, "");
           const parsedMessage = JSON.parse(cleanedMessage);
-          console.log("Mensaje recibido:", parsedMessage);
+         
   
           // Generar alertas
           if (parsedMessage.temperatura > 35) {
