@@ -23,6 +23,9 @@ import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 //imports use callback
 import { useCallback, useRef } from "react";
+let messageLock = false;
+let lastMessageHash = '';
+let lastProcessedTime = 0;
 
 // Contexto de notificaciones
 const NotificationsContext = createContext();
@@ -167,8 +170,7 @@ export default function Navbar() {
   const [lightMode, setLightMode] = useState(2);
   const [connectionStatus, setConnectionStatus] = useState("Conectando...");
   const { addNotification } = useNotifications();
-  const lastMessageTimeRef = useRef(0);
-  const isProccessingRef = useRef(false); // Referencia para evitar múltiples procesos
+
 
   const showAlertToast = useCallback((title, message, type, withSound = false) => {
     const getIcon = () => {
@@ -197,7 +199,7 @@ export default function Navbar() {
         onOpen: withSound ? () => {
           const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/1743/1743-preview.mp3');
           if (audio.canPlayType('audio/mpeg')) {
-            audio.volume = 0.2;
+            audio.volume = 0.02;
             audio.play().catch(e => console.log("Error al reproducir sonido:", e));
           } else {
             console.log("Formato de audio no soportado");
@@ -210,98 +212,111 @@ export default function Navbar() {
 
   const handleMessage = useCallback((topic, message) => {
     const now = Date.now();
-    const timeSinceLastMessage = now - lastMessageTimeRef.current;
-    console.log("Tiempo desde el último mensaje:", timeSinceLastMessage, "ms");
 
-    if (isProccessingRef.current) {
-      console.log("Mensaje en proceso, ignorando nuevo mensaje.");
-      return; // Ignorar si ya se está procesando un mensaje
-    }
-    isProccessingRef.current = true; // Marcar como en proceso
+    const messageHash = '${topic}_${message.toString().substring(0, 50)}';
 
-    if (timeSinceLastMessage < 3000) {
-      return; // Ignorar mensajes si no ha pasado el tiempo suficiente
+    if (messageHash === lastMessageHash) {
+      console.log("Mensaje duplicado, ignorando...");
+      return;
     }
 
-    lastMessageTimeRef.current = now; // Actualizar el tiempo del último mensaje
-    
-    try {
-      const cleanedMessage = message.toString()
-        .replace(/\u00A0/g, " ")
-        .replace(/[^\x20-\x7E]/g, "");
-      const parsedMessage = JSON.parse(cleanedMessage);
-      console.log("Mensaje recibido:", parsedMessage);
-      
-      // Generar alertas
-      if (parsedMessage.temperatura > 35) {
-        const alert = {
-          type: 'danger',
-          title: 'Temperatura peligrosa',
-          message: `Temperatura alcanzó ${parsedMessage.temperatura}°C`,
-          sensor: 'temperatura',
-          value: parsedMessage.temperatura,
-          urgent: true
-        };
-        addNotification(alert);
-        showAlertToast(alert.title, alert.message, 'danger');
-      }
-      
-      if (parsedMessage.humedad > 50) {
-        const alert = {
-          type: 'warning',
-          title: 'Humedad alta',
-          message: `Humedad alcanzó ${parsedMessage.humedad}%`,
-          sensor: 'humedad',
-          value: parsedMessage.humedad
-        };
-        addNotification(alert);
-        showAlertToast(alert.title, alert.message, 'warning');
-      }
-      
-      if (parsedMessage.corriente > 1) {
-        const alert = {
-          type: 'danger',
-          title: 'Corriente elevada',
-          message: `Corriente medida: ${parsedMessage.corriente}A`,
-          sensor: 'corriente',
-          value: parsedMessage.corriente,
-          urgent: true
-        };
-        addNotification(alert);
-        showAlertToast(alert.title, alert.message, 'danger', true);
-      }
+    if (messageLock || (now - lastProcessedTime < 3000)) {
+      return;
+    }
 
-      if (parsedMessage.calidadAire > 400) {
-        const alert = {
-          type: 'warning',
-          title: 'Calidad de aire baja',
-          message: `Calidad de aire medida: ${parsedMessage.calidadAire}`,
-          sensor: 'calidadAire',
-          value: parsedMessage.calidadAire
-        };
-        addNotification(alert);
-        showAlertToast(alert.title, alert.message, 'warning');
-      }
+    messageLock = true;
+  lastMessageHash = messageHash;
+  lastProcessedTime = now;
 
-      
-      if (parsedMessage.puerta === 1) {
-        const alert = {
-          type: 'security',
-          title: 'Acceso detectado',
-          message: 'Se detectó acceso al datacenter',
-          sensor: 'puerta',
-          value: parsedMessage.puerta,
-          urgent: true
-        };
-        addNotification(alert);
-        showAlertToast(alert.title, alert.message, 'security', true);
-      }
-    } catch (error) {
-      console.error("Error procesando mensaje MQTT:", error);
+
+        try {
+          const cleanedMessage = message.toString()
+            .replace(/\u00A0/g, " ")
+            .replace(/[^\x20-\x7E]/g, "");
+          const parsedMessage = JSON.parse(cleanedMessage);
+          console.log("Mensaje recibido:", parsedMessage);
+  
+          // Generar alertas
+          if (parsedMessage.temperatura > 35) {
+            const alert = {
+              type: 'danger',
+              title: 'Temperatura peligrosa',
+              message: `Temperatura alcanzó ${parsedMessage.temperatura}°C`,
+              sensor: 'temperatura',
+              value: parsedMessage.temperatura,
+              urgent: true
+            };
+            addNotification(alert);
+            showAlertToast(alert.title, alert.message, 'danger');
+          }
+  
+          if (parsedMessage.humedad > 50) {
+            const alert = {
+              type: 'warning',
+              title: 'Humedad alta',
+              message: `Humedad alcanzó ${parsedMessage.humedad}%`,
+              sensor: 'humedad',
+              value: parsedMessage.humedad
+            };
+            addNotification(alert);
+            showAlertToast(alert.title, alert.message, 'warning');
+          }
+  
+          if (parsedMessage.corriente > 1) {
+            const alert = {
+              type: 'danger',
+              title: 'Corriente elevada',
+              message: `Corriente medida: ${parsedMessage.corriente}A`,
+              sensor: 'corriente',
+              value: parsedMessage.corriente,
+              urgent: true
+            };
+            addNotification(alert);
+            showAlertToast(alert.title, alert.message, 'danger', true);
+          }
+  
+          if (parsedMessage.calidadAire > 400) {
+            const alert = {
+              type: 'warning',
+              title: 'Calidad de aire baja',
+              message: `Calidad de aire medida: ${parsedMessage.calidadAire}`,
+              sensor: 'calidadAire',
+              value: parsedMessage.calidadAire
+            };
+            addNotification(alert);
+            showAlertToast(alert.title, alert.message, 'warning');
+          }
+  
+          if (parsedMessage.puerta === 1) {
+            const alert = {
+              type: 'security',
+              title: 'Acceso detectado',
+              message: 'Se detectó acceso al datacenter',
+              sensor: 'puerta',
+              value: parsedMessage.puerta,
+              urgent: true
+            };
+            addNotification(alert);
+            showAlertToast(alert.title, alert.message, 'security', true);
+          }
+  
+        } catch (error) {
+          console.error("Error al procesar el mensaje:", error);
+          lastMessageHash = ''; // Reiniciar el hash del último mensaje
+          lastProcessedTime = 0; // Reiniciar el tiempo del último procesamiento
+        
+  
+  
     } finally {
-      isProccessingRef.current = false; // Marcar como no en proceso
+      setTimeout(() => {
+        messageLock = false;
+        lastMessageHash = ''; // Reiniciar el hash del último mensaje
+      }, 100);
     }
   }, [addNotification, showAlertToast]);
+  
+
+  
 
   useEffect(() => {
     const client = mqttInstance.getClient();
