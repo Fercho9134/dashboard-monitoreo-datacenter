@@ -1,5 +1,5 @@
 // src/components/Footer.jsx
-
+import { motion } from "framer-motion";
 export default function Footer() {
   return (
     <footer className="bg-gray-900 text-white py-8 mt-12">
@@ -7,29 +7,37 @@ export default function Footer() {
         {/* Contenido del footer */}
         <div className="text-center">
           {/* Logo o nombre de la aplicación */}
-          <div
+          <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
             className="text-2xl font-bold mb-4"
           >
             DataCenter Monitor
-          </div>
+          </motion.div>
 
           {/* Texto descriptivo */}
-          <div
+          <motion.p
+             initial={{ opacity: 0, y: 20 }}
+             whileInView={{ opacity: 1, y: 0 }}
+             transition={{ duration: 0.5, delay: 0.2 }}
             className="text-gray-400 max-w-md mx-auto"
           >
             Monitorea y analiza los datos de tus sensores en tiempo real.
-          </div>
+          </motion.p>
         </div>
 
         {/* Línea divisoria */}
-        <div className="border-t border-gray-800 mt-8 pt-8 text-center">
+        <motion.div
+           initial={{ opacity: 0, y: 20 }}
+           whileInView={{ opacity: 1, y: 0 }}
+           transition={{ duration: 0.5, delay: 0.4 }}
+           className="border-t border-gray-800 mt-8 pt-8 text-center"
+         ><
           <p className="text-gray-400">
             &copy; {new Date().getFullYear()} DataCenter Monitor. Todos los derechos reservados.
           </p>
-        </div>
+        </motion.div>
       </div>
     </footer>
   );
