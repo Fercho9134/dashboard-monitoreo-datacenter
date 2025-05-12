@@ -48,7 +48,6 @@ Interfaz para generar y visualizar predicciones. Actualmente deshabilitada, por 
 Permite visualizar datos históricos con filtros por fecha y sensor, gráficos temporales, mapas de calor y tablas de datos detallados. Esta pestaña funciona correctamente con los datos disponibles.
 
 ![Captura de la pestaña SensorDetail](./images/historicos.png)
-*(Inserta aquí una o varias capturas de pantalla de la pestaña SensorDetail, mostrando filtros, gráficos o tablas)*
 
 ## Tecnologías Utilizadas
 
